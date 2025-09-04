@@ -2,7 +2,7 @@
 
 This project is part of the AI Accreditation study. The goal is to build a **Streamlit dashboard** that evaluates operators against ethical criteria using Gatekeepers, ARAS (Additive Ratio Assessment System), and tiering (Platinum/Gold/Silver/Bronze).
 
-👉 Live demo (Week-1): [https://ai-accreditation-week1.streamlit.app/](https://ai-accreditation-week1.streamlit.app/)
+👉 Live demo (Week-1): [https://ai-accreditation-week1-deliverable.streamlit.app/](https://ai-accreditation-week1-delivarable.streamlit.app/)
 
 ---
 
