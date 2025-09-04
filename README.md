@@ -49,19 +49,6 @@ ai-accreditation/
   - **Results** – placeholder (to be filled in from Week-3 onward).  
   - **Export** – allows downloading a snapshot CSV of current data.  
 
-Deliverables so far:
-- 📸 Screenshots of each page (submitted separately).  
-- 🌐 Live deployment on Streamlit Cloud.  
-
----
-
-## 📅 Next Steps
-- **Week-2**: Compute median-based weights from Delphi input and normalize to sum = 1.  
-- **Weeks 3–5**: Implement Gatekeepers + ARAS scoring + Tier mapping.  
-- **Week-6+**: Add polish (method panel, export results, sensitivity analysis).  
-
----
-
 ## 📌 Notes
 - Data files in `/data` are examples.  
 - The app currently only loads and displays them; no accreditation logic is applied yet.  
