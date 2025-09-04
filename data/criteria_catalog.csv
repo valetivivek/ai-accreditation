@@ -1,0 +1,19 @@
+criterion_id,theme,name,type,unit,desc,gate_min,gate_max
+EXP_COVERAGE,Explainability,Explanation coverage (%),benefit,percent,% of consequential AI decisions with a human-readable explanation,90.0,
+EXP_FAITHFUL,Explainability,Faithfulness score (0-1),benefit,ratio,Agreement between explanation features and model importance,0.7,
+EXP_STABILITY,Explainability,Stability score (0-1),benefit,ratio,Explanation stability under small perturbations,,
+EXPL_EXCL_TARGET,Exploitation,Excluded/at-risk targeting rate (%),cost,percent,% of excluded/at-risk users receiving offers or ads,,0.0
+EXPL_DARKPAT,Exploitation,Dark pattern index (0-1),cost,ratio,UX risk score for manipulative design,,0.1
+EXPL_VULN_UPLIFT,Exploitation,Uplift on vulnerable cohorts (%),cost,percent,Incremental engagement uplift for vulnerable users (should be ≤ 0),,0.0
+ALG_BIAS_GAP,Algorithmic Flaws,Max subgroup PPV/TPR gap,cost,ratio,Largest absolute gap across salient subgroups,,0.05
+ALG_ECE,Algorithmic Flaws,Expected Calibration Error,cost,ratio,Calibration error on holdout,,0.05
+ALG_ROBUST_DROP,Algorithmic Flaws,Robustness drop under noise (%),cost,percent,Max performance drop under realistic noise/missingness,,10.0
+CR_CONSENT,Consumer Rights,Consent/opt-out coverage (%),benefit,percent,% of users with valid consent or opt-out honored,95.0,
+CR_DSAR_SLA,Consumer Rights,DSAR/erasure SLA (days),cost,days,Avg days to fulfill data subject requests,,30.0
+CR_MINIMIZE,Consumer Rights,Data minimization score (0-1),benefit,ratio,Evidence of data minimization in training/ops,0.7,
+ACC_LOGS,Accountability,Audit log completeness (%),benefit,percent,% of required fields present in AI decision logs,95.0,
+ACC_TAMPER,Accountability,Tamper-evidence enabled (0/1),benefit,binary,Immutable/tamper-evident logging deployed,1.0,
+ACC_TRACE,Accountability,Change-control traceability (%),benefit,percent,"% deployments linked to tickets, approvals, and reasons",90.0,
+HIL_REVIEW_COV,Human-in-the-Loop,Review coverage (high-impact) (%),benefit,percent,% of high-impact decisions reviewed by qualified humans,95.0,
+HIL_SLA,Human-in-the-Loop,Override/appeal SLA (hours),cost,hours,Median time to resolve contested decisions,,72.0
+HIL_KAPPA,Human-in-the-Loop,Reviewer agreement (Cohen’s kappa),benefit,ratio,Inter-reviewer agreement on decisions,0.6,
