@@ -1,11 +1,10 @@
 # helpers.py
 from __future__ import annotations
 from pathlib import Path
-import io
 import pandas as pd
 import streamlit as st
 
-APP_TITLE = "AI Accreditation – Week 1"
+APP_TITLE = "AI Accreditation"   # base title (no week by default)
 DATA_DIR = Path(__file__).parent / "data"
 EXPECTED_FILES = {
     "criteria_catalog": "criteria_catalog.csv",
@@ -32,7 +31,8 @@ def try_load(name_key: str):
     return None, f"Missing {filename}"
 
 def show_df(df: pd.DataFrame, caption: str = ""):
-    if caption: st.caption(caption)
+    if caption:
+        st.caption(caption)
     st.dataframe(df, use_container_width=True, height=420)
 
 def availability_badge():
@@ -42,20 +42,23 @@ def availability_badge():
     else:
         st.success("All expected CSVs found in /data")
 
-def topbar():
+def topbar(title: str = APP_TITLE):
     # sticky top bar with Home button (top-left)
-    st.markdown("""
+    st.markdown(
+        """
         <style>
             .topbar { position: sticky; top: 0; z-index: 999; background: var(--background-color);
                       padding: .5rem 0 .5rem 0; margin: -1rem 0 1rem 0; }
         </style>
-    """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
     with st.container():
         st.markdown('<div class="topbar"></div>', unsafe_allow_html=True)
         cols = st.columns([1, 6, 3])
         with cols[0]:
             st.page_link("streamlit_app.py", label="🏠 Home")
         with cols[1]:
-            st.title(APP_TITLE)
+            st.title(title)
         with cols[2]:
             availability_badge()
