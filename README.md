@@ -8,7 +8,7 @@ The goal is to build a **Streamlit dashboard** that evaluates operators against 
 - **ARAS** (Additive Ratio Assessment System)
 - **Tiering** (Platinum / Gold / Silver / Bronze)
 
-👉 Live demo: [AI Accreditation – Week 1](https://ai-accreditation-week-1-deliverables.streamlit.app/)
+👉 Live demo: [AI Accreditation – Week 1](https://ai-accreditation.streamlit.app/)
 
 ---
 
