@@ -1,15 +1,19 @@
-# streamlit_app.py
+# This is basically app bootstrap and global UI
 from helpers import topbar
 
 topbar()
 import streamlit as st
 
 st.markdown("""
-**Week-1 goals**
-- Confirm project structure and `/data` files exist  
-- Load and display CSVs on dedicated pages  
-- Prepare placeholders for later math (Gatekeepers → ARAS → Tiers)  
+**Week-3 goals**
+- ✅ Confirm project structure and `/data` files exist  
+- ✅ Load and display CSVs on dedicated pages  
+- ✅ Compute Delphi weights (Week-2)  
+- ✅ Implement Gatekeeper pass/fail logic  
+- ✅ Calculate ARAS utility (K) with normalization  
+- ✅ Assign tiers (Platinum / Gold / Silver / Bronze)  
 """)
+
 
 st.divider()
 st.subheader("Quick Navigation")

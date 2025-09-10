@@ -1,15 +1,15 @@
-from helpers import topbar, try_load, show_df
-import streamlit as st
+from helpers import topbar, try_load, show_df # To load all the things like titles and the home button
+import streamlit as st # will be importing streamlit in every page
 topbar()
 
 st.header("Weights")
 st.write("Displays expert inputs (Delphi) and any precomputed weights (if present).")
 
-delphi_df, delphi_msg = try_load("delphi_round1")
+delphi_df, delphi_msg = try_load("delphi_round1") # To load the delphi data from the data folder, and delphi_msg is for describing what happened
 st.subheader("Delphi Round 1 (expert importance 1–9)")
 st.caption(delphi_msg)
 if delphi_df is not None and not delphi_df.empty:
-    show_df(delphi_df, "Raw expert inputs used to derive weights (Week-2 will compute).")
+    show_df(delphi_df, "Raw expert inputs used to derive weights.")
 else:
     st.info("Add `delphi_round1_example.csv` to /data to view.")
 

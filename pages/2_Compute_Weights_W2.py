@@ -1,4 +1,3 @@
-# pages/2_Compute_Weights_W2.py
 import streamlit as st
 import pandas as pd
 from helpers import topbar, try_load, show_df
@@ -101,15 +100,9 @@ if st.button("Compute weights"):
         n_experts = df.groupby(crit_col)[exp_col].nunique()
         out["n_experts"] = n_experts.reindex(out["criterion_id"]).fillna(0).astype(int).values
 
-    # sanity + preview
-    st.success(f"Computed {len(out)} weights. Sum = {out['weight'].sum():.6f}")
-    show_df(out, "Preview of computed weights")
+   
 
-    with st.expander("Sanity checks"):
-        st.write("Sum of weights should be ≈ 1.0. Large variance across criteria may indicate disagreement.")
-        st.bar_chart(out.set_index("criterion_id")["weight"])
-
-    # download (optional for local use; safe in cloud as a user download)
+    # download
     st.download_button(
         "Download weights_from_delphi.csv",
         out.to_csv(index=False).encode("utf-8"),
@@ -118,4 +111,3 @@ if st.button("Compute weights"):
     )
 
 st.divider()
-st.caption("Tip: Save as /data/weights_from_delphi_example.csv so Week-1 pages detect it automatically.")
