@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Tuple
+import warnings
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -196,142 +197,283 @@ gate_op = (
 )
 
 # =========================
-# ARAS computation
+# ARAS computation (Spec-compliant)
 # =========================
 st.subheader("ARAS Settings")
-left, right = st.columns([1, 1])
-with left:
-    norm_method = st.radio(
-        "Normalization method",
-        ["Min–Max to [0,1]", "Z score then clamp to [0,1]"],
-        horizontal=True,
-    )
-with right:
-    show_debug = st.checkbox("Show debug tables")
+col1, col2 = st.columns(2)
+with col1:
+    show_debug = st.checkbox("Show debug tables and method explanation")
+with col2:
+    strict_gatekeeper = st.checkbox("Strict gatekeeper enforcement", value=True, 
+                                   help="If unchecked, operators with gate failures can still get accredited tiers based on K score")
+
+if show_debug:
+    with st.expander("ARAS Method Explanation"):
+        st.markdown("""
+        **ARAS (Additive Ratio Assessment System) Steps:**
+        
+        1. **Gatekeepers**: Check if operator scores meet min/max thresholds per criterion
+        2. **ARAS Normalization**: 
+           - Benefit criteria: `x' = x / sum(x)` (linear ratio)
+           - Cost criteria: `x' = (1/x) / sum(1/x)` (inverse ratio)
+        3. **Weighted Sum**: `Si = Σ(w * x')` for each operator i
+        4. **Ideal Reference**: `S0 = Σ(w * x'0)` where x'0 uses best value per criterion
+           - Best = max for benefit criteria, min for cost criteria
+        5. **Final Score**: `K = Si / S0` (ratio to ideal)
+        6. **Tier Assignment**: 
+           - Platinum: K ≥ 0.90
+           - Gold: K ≥ 0.80  
+           - Silver: K ≥ 0.65
+           - Bronze: K ≥ 0.50
+        """)
 
 # Build decision matrix: rows operators, columns criteria
 pivot = ops_use.pivot_table(index="operator_id", columns="criterion_id", values="score", aggfunc="mean")
+# Ensure operator_id and criterion_id are strings
+pivot.index = pivot.index.astype(str)
+pivot.columns = pivot.columns.astype(str)
+
 # Align to weight criteria set
-pivot = pivot.reindex(columns=weights["criterion_id"], fill_value=np.nan)
+pivot = pivot.reindex(columns=weights["criterion_id"].astype(str), fill_value=np.nan)
 
-# Per-criterion normalization
-def nn_minmax(x: pd.Series, sense: str) -> pd.Series:
-    # sense: benefit or cost
-    if x.notna().sum() <= 1:
-        return pd.Series(0.0, index=x.index)  # degenerate
-    xmin, xmax = x.min(), x.max()
-    if math.isclose(xmax, xmin):
-        return pd.Series(0.5, index=x.index)
-    z = (x - xmin) / (xmax - xmin)
-    if sense == "cost":
-        z = 1.0 - z
-    return z.clip(0.0, 1.0)
-
-def nn_zscore(x: pd.Series, sense: str) -> pd.Series:
-    if x.notna().sum() <= 1:
-        z = pd.Series(0.0, index=x.index)
-    else:
-        mu, sd = x.mean(), x.std(ddof=0)
-        if math.isclose(sd, 0.0):
-            z = pd.Series(0.5, index=x.index)
-        else:
-            z = (x - mu) / sd
-            # map approx z in [-3, +3] to [0,1]
-            z = (z + 3) / 6
-    if sense == "cost":
-        z = 1.0 - z
-    return z.clip(0.0, 1.0)
-
-# sense per criterion
+# Get criterion types
 sense_map = crit_use.set_index("criterion_id")["type"].reindex(pivot.columns).fillna("benefit")
 
+def aras_normalize_benefit(x: pd.Series) -> pd.Series:
+    """ARAS benefit normalization: x' = x / sum(x)"""
+    valid_x = x.dropna()
+    if len(valid_x) < 2:
+        return pd.Series(np.nan, index=x.index)
+    sum_x = valid_x.sum()
+    if math.isclose(sum_x, 0):
+        return pd.Series(0.0, index=x.index)
+    return x / sum_x
+
+def aras_normalize_cost(x: pd.Series) -> pd.Series:
+    """ARAS cost normalization: x' = (1/x) / sum(1/x)"""
+    valid_x = x.dropna()
+    if len(valid_x) < 2:
+        return pd.Series(np.nan, index=x.index)
+    
+    # Handle zeros by replacing with NaN
+    inv_x = np.where(valid_x == 0, np.nan, 1.0 / valid_x)
+    inv_series = pd.Series(inv_x, index=valid_x.index)
+    
+    sum_inv = inv_series.sum()
+    if math.isnan(sum_inv) or math.isclose(sum_inv, 0):
+        return pd.Series(np.nan, index=x.index)
+    
+    # Apply normalization to original series
+    result = pd.Series(np.nan, index=x.index)
+    for idx in x.index:
+        if not pd.isna(x.loc[idx]) and x.loc[idx] != 0:
+            result.loc[idx] = (1.0 / x.loc[idx]) / sum_inv
+    return result
+
+# Apply ARAS normalization per criterion
 norm = pd.DataFrame(index=pivot.index, columns=pivot.columns, dtype=float)
+dropped_criteria = []
+
 for cid in pivot.columns:
     s = pivot[cid].astype(float)
     sense = sense_map.get(cid, "benefit")
-    if norm_method.startswith("Min"):
-        norm[cid] = nn_minmax(s, sense)
-    else:
-        norm[cid] = nn_zscore(s, sense)
+    
+    # Check for sufficient valid values
+    valid_count = s.notna().sum()
+    if valid_count < 2:
+        dropped_criteria.append(f"{cid} (only {valid_count} valid values)")
+        continue
+    
+    if sense == "benefit":
+        norm[cid] = aras_normalize_benefit(s)
+    else:  # cost
+        norm[cid] = aras_normalize_cost(s)
 
-# Weighted sum
-w = weights.set_index("criterion_id")["weight"].reindex(norm.columns).fillna(0.0)
-K_raw = (norm * w).sum(axis=1)
+# Report dropped criteria
+if dropped_criteria:
+    st.warning(f"Dropped criteria with insufficient data: {', '.join(dropped_criteria)}")
 
-# Normalize K to best = 1.0
-if K_raw.max() > 0:
-    K = K_raw / K_raw.max()
+# Update weights to match remaining criteria
+remaining_criteria = [c for c in norm.columns if not norm[c].isna().all()]
+if len(remaining_criteria) != len(weights):
+    st.info(f"Using {len(remaining_criteria)} criteria (dropped {len(weights) - len(remaining_criteria)} due to insufficient data)")
+
+# Re-normalize weights for remaining criteria
+w_subset = weights[weights["criterion_id"].astype(str).isin(remaining_criteria)].copy()
+if len(w_subset) > 0:
+    w_subset["weight"] = w_subset["weight"] / w_subset["weight"].sum()
+    w = w_subset.set_index("criterion_id")["weight"].reindex(remaining_criteria).fillna(0.0)
 else:
-    K = K_raw  # all zeros
+    # Fallback to equal weights
+    equal_weight = 1.0 / len(remaining_criteria)
+    w = pd.Series(equal_weight, index=remaining_criteria)
+    st.warning("No valid weights found, using equal weights")
+
+# Compute weighted sums Si for each operator
+S_i = (norm[remaining_criteria] * w).sum(axis=1)
+
+# Compute ideal reference S0
+S0_components = []
+for cid in remaining_criteria:
+    sense = sense_map.get(cid, "benefit")
+    col_data = pivot[cid].dropna()
+    
+    if len(col_data) == 0:
+        continue
+        
+    if sense == "benefit":
+        best_val = col_data.max()
+    else:  # cost
+        best_val = col_data.min()
+    
+    # Normalize this best value using the same ARAS method
+    if sense == "benefit":
+        best_norm = aras_normalize_benefit(col_data).max()
+    else:
+        best_norm = aras_normalize_cost(col_data).min()
+    
+    S0_components.append(w[cid] * best_norm)
+
+S0 = sum(S0_components)
+
+# Compute final ARAS scores K = Si / S0
+if S0 > 0:
+    K = S_i / S0
+else:
+    K = pd.Series(0.0, index=S_i.index)
+    st.error("Ideal reference S0 is zero - cannot compute ARAS scores")
 
 aras_df = (
-    pd.DataFrame({"operator_id": K.index, "K": K.values})
-    .sort_values("K", ascending=False)
+    pd.DataFrame({"operator_id": K.index.astype(str), "K": K.values})
     .reset_index(drop=True)
 )
 
-# =========================
-# Tier assignment
-# =========================
-def assign_tier(k: float) -> str:
-    if pd.isna(k):
-        return "Bronze"
-    if k >= 0.85:
-        return "Platinum"
-    if k >= 0.70:
-        return "Gold"
-    if k >= 0.55:
-        return "Silver"
-    return "Bronze"
+# Add criteria contribution count
+criteria_counts = norm[remaining_criteria].notna().sum(axis=1)
+aras_df["n_criteria"] = criteria_counts.reindex(K.index).fillna(0).astype(int).values
 
-aras_df["Tier"] = aras_df["K"].apply(assign_tier)
+# =========================
+# Tier assignment (Updated thresholds)
+# =========================
+def assign_tier(k: float, gate_passed: bool = True, strict: bool = True) -> str:
+    """Assign tier based on K score and gate status"""
+    if pd.isna(k):
+        return "Not Accredited"
+    
+    # If strict gatekeeper enforcement is disabled, ignore gate status
+    if not strict or gate_passed:
+        if k >= 0.90:
+            return "Platinum"
+        if k >= 0.80:
+            return "Gold"
+        if k >= 0.65:
+            return "Silver"
+        if k >= 0.50:
+            return "Bronze"
+    
+    return "Not Accredited"
 
 # Merge Gatekeepers and ARAS
 final = (
     aras_df.merge(gate_op, on="operator_id", how="left")
-            .sort_values(["gate_pass", "K"], ascending=[False, False])
             .reset_index(drop=True)
 )
 
-# If an operator fails gates, you may want to optionally zero out K
-apply_gate_zero = st.checkbox("Set K to 0 for gate failures", value=True)
-if apply_gate_zero:
-    final["K"] = np.where(final["gate_pass"].fillna(False), final["K"], 0.0)
-    final["Tier"] = np.where(final["gate_pass"].fillna(False), final["Tier"], "Bronze")
+# Assign tiers (K is computed regardless of gate status)
+final["Tier"] = final.apply(lambda row: assign_tier(row["K"], row["gate_pass"], strict_gatekeeper), axis=1)
+
+# Sort by gate_pass desc, then K desc
+final = final.sort_values(["gate_pass", "K"], ascending=[False, False]).reset_index(drop=True)
 
 # =========================
 # Display
 # =========================
 st.subheader("Summary")
-summary = final[["operator_id", "gate_pass", "K", "Tier", "failed_reasons"]].copy()
+summary = final[["operator_id", "gate_pass", "K", "Tier", "n_criteria", "failed_reasons"]].copy()
 summary = summary.rename(columns={
     "gate_pass": "Gatekeeper",
     "failed_reasons": "Fail reasons",
+    "n_criteria": "Criteria used"
 })
 summary["Gatekeeper"] = summary["Gatekeeper"].map({True: "Pass", False: "Fail", np.nan: "Unknown"})
 
-show_df(summary, "Operator results with gate status, ARAS K, and assigned tier.")
+show_df(summary, "Operator results with gate status, ARAS K, criteria count, and assigned tier.")
 
 if show_debug:
     with st.expander("Debug: Weights used"):
-        show_df(weights, "Weights aligned to criteria used in ARAS.")
+        w_debug = pd.DataFrame({
+            "criterion_id": remaining_criteria,
+            "weight": [w[c] for c in remaining_criteria],
+            "weight_sum": w.sum()
+        })
+        show_df(w_debug, f"Weights aligned to {len(remaining_criteria)} criteria (sum = {w.sum():.6f})")
+    
+    with st.expander("Debug: ARAS Components"):
+        aras_debug = pd.DataFrame({
+            "operator_id": S_i.index,
+            "S_i": S_i.values,
+            "S0": S0,
+            "K": K.values
+        })
+        show_df(aras_debug, f"ARAS computation: Si={S_i.values}, S0={S0:.6f}")
+    
     with st.expander("Debug: Criteria, gatekeepers, and sense"):
         show_df(crit_use, "Criteria with sense and gate thresholds.")
+    
     with st.expander("Debug: Decision matrix (raw scores)"):
         show_df(pivot.reset_index(), "Operators by criteria, raw scores.")
-    with st.expander("Debug: Normalized matrix used for ARAS"):
-        show_df(norm.reset_index(), "Per criterion normalized scores in [0,1].")
+    
+    with st.expander("Debug: ARAS normalized matrix"):
+        norm_display = norm[remaining_criteria].copy()
+        norm_display.index.name = "operator_id"
+        show_df(norm_display.reset_index(), "ARAS normalized scores (x/sum(x) for benefit, (1/x)/sum(1/x) for cost)")
+    
+    with st.expander("Debug: Gatekeeper details"):
+        gate_debug = gate[["operator_id", "criterion_id", "score", "type", "gate_min", "gate_max", "crit_pass", "crit_reason"]].copy()
+        show_df(gate_debug, "Detailed gatekeeper evaluation per operator-criterion pair")
 
 st.divider()
 st.subheader("Charts")
+
 c1, c2 = st.columns(2)
+
 with c1:
-    st.bar_chart(summary.set_index("operator_id")["K"])
+    st.write("**ARAS Scores by Operator**")
+    chart_data = summary[["operator_id", "K", "Tier", "Gatekeeper"]].copy()
+    
+    # Sort by K for visualization
+    chart_data = chart_data.sort_values("K", ascending=False)
+    
+    # Create a simple bar chart without color parameter
+    st.bar_chart(chart_data.set_index("operator_id")["K"])
+    
+    # Add legend/explanation
+    st.caption("**Legend**: All operators shown. Check 'Gatekeeper' column for pass/fail status.")
+
 with c2:
-    tier_counts = summary["Tier"].value_counts().reindex(["Platinum", "Gold", "Silver", "Bronze"]).fillna(0).astype(int)
+    st.write("**Tier Distribution**")
+    tier_counts = summary["Tier"].value_counts()
+    tier_order = ["Platinum", "Gold", "Silver", "Bronze", "Not Accredited"]
+    tier_counts = tier_counts.reindex(tier_order).fillna(0).astype(int)
+    
     st.bar_chart(tier_counts)
+    st.caption(f"Total operators: {len(summary)}")
+
+# Add summary statistics
+st.subheader("Summary Statistics")
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Total Operators", len(summary))
+with col2:
+    st.metric("Gate Passed", summary["Gatekeeper"].eq("Pass").sum())
+with col3:
+    st.metric("Avg K Score", f"{summary['K'].mean():.3f}")
+with col4:
+    st.metric("Max K Score", f"{summary['K'].max():.3f}")
 
 st.caption(
-    "Notes: benefit vs cost is inferred from `type` in criteria_catalog. "
-    "Gatekeepers use gate_min and gate_max if present. K is normalized so the best operator equals 1.0."
+    f"**ARAS Method**: K = Si/S0 where Si = Σ(w×x') and S0 uses best values per criterion. "
+    "Benefit: x' = x/sum(x), Cost: x' = (1/x)/sum(1/x). "
+    f"Gatekeeper enforcement: {'Strict' if strict_gatekeeper else 'Lenient'} - "
+    f"{'Gate failures result in Not Accredited' if strict_gatekeeper else 'K score determines tier regardless of gates'}."
 )

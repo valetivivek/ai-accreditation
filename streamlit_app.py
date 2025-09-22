@@ -5,13 +5,14 @@ topbar()
 import streamlit as st
 
 st.markdown("""
-**Week-3 goals**
+**Week-3 goals** ✅ **COMPLETED**
 - ✅ Confirm project structure and `/data` files exist  
 - ✅ Load and display CSVs on dedicated pages  
 - ✅ Compute Delphi weights (Week-2)  
 - ✅ Implement Gatekeeper pass/fail logic  
-- ✅ Calculate ARAS utility (K) with normalization  
-- ✅ Assign tiers (Platinum / Gold / Silver / Bronze)  
+- ✅ Calculate ARAS utility (K) with proper specification compliance
+- ✅ Assign tiers (Platinum / Gold / Silver / Bronze / Not Accredited)
+- ✅ Enhanced debugging and numerical safety
 """)
 
 

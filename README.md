@@ -5,7 +5,7 @@ The goal is to build a **Streamlit dashboard** that evaluates operators against 
 
 - **Gatekeepers** (minimum threshold checks)
 - **ARAS** (Additive Ratio Assessment System utility calculation)
-- **Tiering** (Platinum / Gold / Silver / Bronze based on ARAS score)
+- **Tiering** (Platinum / Gold / Silver / Bronze / Not Accredited based on ARAS score)
 
 👉 Live demo: [AI Accreditation – Week 3](https://ai-accreditation.streamlit.app/)
 
@@ -39,8 +39,8 @@ ai-accreditation/
 - ✅ **CSV loading & previews** for criteria, Delphi inputs, weights, operator scores  
 - ✅ **Delphi weight computation** (mean / median / trimmed mean, Week-2)  
 - ✅ **Gatekeeper evaluation** with pass/fail and reasons per operator  
-- ✅ **ARAS utility (K)** calculation with benefit/cost normalization  
-- ✅ **Tier assignment** (Platinum ≥0.85, Gold ≥0.70, Silver ≥0.55, else Bronze)  
+- ✅ **ARAS utility (K)** calculation with proper specification compliance
+- ✅ **Tier assignment** (Platinum / Gold / Silver / Bronze / Not Accredited)  
 - ✅ **Debug expanders** to inspect weights, normalization, and decision matrix  
 - ✅ **Charts**: operator utilities and tier distribution  
 - ✅ **CSV Export snapshot**  
